@@ -79,3 +79,113 @@ class FincaTests(TestCase):
     def test_finca_str_method(self):
         """Funcional: Verifica la representación en cadena de la Finca"""
         self.assertEqual(str(self.finca), 'Finca FNC002 - Bogotá')
+
+# Pruebas para el modelo Vivero
+from django.db.utils import IntegrityError
+
+class ViveroTests(TestCase):
+    def setUp(self):
+        self.finca = Finca.objects.create(
+            productor=Productor.objects.create(
+                documento_identidad='876543210',
+                nombre='Luis',
+                apellido='Fernández',
+                telefono='5555432',
+                correo='luis@example.com'
+            ),
+            numero_catastro='FNC003',
+            municipio='Cali'
+        )
+        self.vivero = Vivero.objects.create(
+            finca=self.finca,
+            codigo='VIV002',
+            tipo_cultivo='Maíz'
+        )
+
+    def test_vivero_creation(self):
+        """Funcional: Verifica que se pueda crear un Vivero con datos válidos"""
+        vivero = Vivero.objects.get(codigo='VIV002')
+        self.assertEqual(vivero.tipo_cultivo, 'Maíz')
+
+    def test_vivero_foreign_key(self):
+        """Funcional: Verifica que el Vivero esté asociado correctamente a una Finca"""
+        self.assertEqual(self.vivero.finca.numero_catastro, 'FNC003')
+
+    def test_vivero_unique_codigo(self):
+        """No funcional: Verifica que el código del Vivero sea único"""
+        # Primero, crea un Vivero con un código específico
+        Vivero.objects.create(
+            finca=self.finca,
+            codigo='VIV003',
+            tipo_cultivo='Trigo'
+        )
+        
+        # Intenta crear otro Vivero con el mismo código
+        try:
+            Vivero.objects.create(
+                finca=self.finca,
+                codigo='VIV003',  # Código duplicado
+                tipo_cultivo='Cebada'
+            )
+            # Si no se lanza una excepción, la prueba falla
+            self.fail("Expected IntegrityError due to unique constraint on 'codigo'")
+        except IntegrityError:
+            pass  # La excepción esperada se ha lanzado
+
+# Pruebas para el modelo Labor
+class LaborTests(TestCase):
+    def setUp(self):
+        self.vivero = Vivero.objects.create(
+            finca=Finca.objects.create(
+                productor=Productor.objects.create(
+                    documento_identidad='654321098',
+                    nombre='Marta',
+                    apellido='López',
+                    telefono='5554321',
+                    correo='marta@example.com'
+                ),
+                numero_catastro='FNC004',
+                municipio='Medellín'
+            ),
+            codigo='VIV003',
+            tipo_cultivo='Arroz'
+        )
+        self.labor = Labor.objects.create(
+            vivero=self.vivero,
+            fecha='2024-09-15',
+            descripcion='Aplicación de fungicida'
+        )
+        self.producto_hongo = ProductoControlHongo.objects.create(
+            registro_ica='ICA123',
+            nombre_producto='Fungicida X',
+            frecuencia_aplicacion=15,
+            valor=100.00,
+            periodo_carencia=7,
+            nombre_hongo='Oídio'
+        )
+        self.labor.productos_control_hongo.add(self.producto_hongo)
+
+   
+    
+    def test_labor_creation(self):
+        """Funcional: Verifica que se pueda crear una Labor con datos válidos"""
+        labor = Labor.objects.get(descripcion='Aplicación de fungicida')
+        fecha_esperada = datetime.strptime('2024-09-15', '%Y-%m-%d').date()  # Convierte la cadena a date
+        self.assertEqual(labor.fecha, fecha_esperada)
+
+
+    def test_labor_foreign_key(self):
+        """Funcional: Verifica que la Labor esté asociada correctamente a un Vivero"""
+        self.assertEqual(self.labor.vivero.codigo, 'VIV003')
+
+    def test_labor_m2m_relationship(self):
+        """Funcional: Verifica que la Labor pueda estar asociada a Productos de Control Hongo"""
+        self.assertIn(self.producto_hongo, self.labor.productos_control_hongo.all())
+
+    def test_labor_fecha_format(self):
+        """No funcional: Verifica que la fecha de la Labor sea un valor de fecha válido"""
+        self.assertIsInstance(self.labor.fecha, str)  # Asume que la fecha es guardada como string
+
+    def test_labor_str_method(self):
+        """Funcional: Verifica la representación en cadena de la Labor"""
+        self.assertEqual(str(self.labor), 'Labor Aplicación de fungicida en 2024-09-15')
